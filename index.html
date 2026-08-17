@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flight Plan Editor</title>
+<style>
+  :root {
+    --bg: #1e1f24;
+    --panel: #26282f;
+    --panel-2: #2e3038;
+    --border: #3a3d47;
+    --text: #e6e6ea;
+    --muted: #9a9ca6;
+    --accent: #5b9dff;
+    --accent-2: #ff9d5b;
+    --good: #5bd68a;
+    --danger: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+  header {
+    padding: 12px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  header h1 {
+    font-size: 16px;
+    margin: 0;
+    font-weight: 600;
+  }
+  header .desc {
+    color: var(--muted);
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 300px 1fr 320px;
+    gap: 1px;
+    background: var(--border);
+    height: calc(100vh - 49px);
+  }
+  .col {
+    background: var(--bg);
+    overflow-y: auto;
+    padding: 14px;
+  }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 14px;
+  }
+  section h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin: 0 0 10px 0;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 4px;
+    margin-top: 10px;
+  }
+  label:first-child { margin-top: 0; }
+  input[type=text], input[type=number], select {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  input[type=file] { font-size: 12px; color: var(--muted); }
+  input:disabled { opacity: 0.5; }
+  button {
+    background: var(--accent);
+    color: #0c1420;
+    border: none;
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  button.secondary {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  button.danger { background: var(--danger); color: #200; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .row { display: flex; gap: 8px; margin-top: 10px; }
+  .row > * { flex: 1; }
+  .radio-opt {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-top: 8px;
+    cursor: pointer;
+  }
+  .radio-opt input { margin-top: 2px; }
+  .radio-opt .t { font-weight: 600; font-size: 13px; }
+  .radio-opt .d { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .radio-opt.selected { border-color: var(--accent); background: rgba(91,157,255,0.08); }
+
+  #svgWrap {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    height: 55%;
+    min-height: 320px;
+    position: relative;
+  }
+  svg { width: 100%; height: 100%; display: block; }
+  #legend {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px;
+  }
+  #legend svg { width: 80px; height: 80px; }
+  .wp-dot { fill: var(--accent); stroke: #0c1420; stroke-width: 2; cursor: pointer; }
+  .wp-dot.selected { fill: var(--accent-2); }
+  .wp-label { fill: var(--text); font-size: 15px; font-weight: 700; pointer-events: none; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+  .path-line { stroke: var(--muted); stroke-width: 1.5; fill: none; opacity: 0.6; }
+  .car-rect { fill: rgba(255,255,255,0.05); stroke: var(--good); stroke-width: 1.5; stroke-dasharray: 4 3; }
+  .anchor-label { fill: var(--good); font-size: 10px; font-weight: 600; }
+  .side-label { fill: var(--accent-2); font-size: 22px; font-weight: 700; letter-spacing: 0.08em; }
+  .legend-arrow { stroke: var(--accent); stroke-width: 2; fill: none; }
+  .legend-text { fill: var(--text); font-size: 11px; font-weight: 600; }
+  .legend-yaw { stroke: var(--accent-2); stroke-width: 2; fill: none; }
+
+  #wpList {
+    margin-top: 12px;
+    max-height: 40%;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .wp-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .wp-row:last-child { border-bottom: none; }
+  .wp-row:hover { background: var(--panel-2); }
+  .wp-row.selected { background: rgba(91,157,255,0.15); }
+  .wp-row .idx { color: var(--muted); width: 24px; }
+  .wp-row .anchor-tag {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 6px;
+    font-size: 11px;
+    color: var(--good);
+  }
+  .empty-hint {
+    color: var(--muted);
+    text-align: center;
+    padding: 40px 20px;
+    font-size: 13px;
+  }
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+  .status {
+    font-size: 12px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin-top: 10px;
+  }
+  .status.ok { background: rgba(91,214,138,0.12); color: var(--good); }
+  .status.err { background: rgba(255,107,107,0.12); color: var(--danger); }
+  .hint { color: var(--muted); font-size: 11px; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Flight Plan Editor</h1>
+  <div class="desc" id="headerDesc">No plan loaded</div>
+</header>
+
+<div class="layout">
+
+  <!-- LEFT: Load + Vehicle -->
+  <div class="col">
+    <section>
+      <h2>Load Flight Plan</h2>
+      <input type="file" id="fileInput" accept="application/json,.json">
+      <div id="loadStatus"></div>
+    </section>
+
+    <section>
+      <h2>Vehicle</h2>
+      <p class="hint" style="margin-top:0">
+        Not stored in the file. Used for Partial Localisation export (car outline width shown is a nominal placeholder, not to scale).
+      </p>
+      <label>Length (cm, front-to-rear)</label>
+      <input type="number" id="vehLength" value="440" min="0">
+    </section>
+
+    <section>
+      <h2>Description</h2>
+      <label>Plan description</label>
+      <input type="text" id="planDesc" disabled>
+    </section>
+
+    <section>
+      <h2>Transform</h2>
+      <p class="hint" style="margin-top:0">
+        Mirrors the plan left-right: anchors a↔d and b↔c swap, x-offset negates, yaw-value negates. y-offset and altitude are unchanged.
+      </p>
+      <button class="secondary" id="btnMirror" style="width:100%" disabled>Mirror Plan (Y axis)</button>
+    </section>
+  </div>
+
+  <!-- CENTER: Path + Waypoint list -->
+  <div class="col">
+    <section style="padding:0; overflow:hidden;" id="svgWrap">
+      <svg id="pathSvg" viewBox="-300 -300 600 600"></svg>
+      <div id="legend">
+        <svg viewBox="0 0 90 90" width="90" height="90">
+          <!-- +X offset arrow (left) -->
+          <line x1="70" y1="45" x2="10" y2="45" class="legend-arrow" marker-end="url(#legendArrowHead)"/>
+          <text x="2" y="49" class="legend-text" text-anchor="end">+X</text>
+          <!-- +Y arrow (down) -->
+          <line x1="20" y1="12" x2="20" y2="72" class="legend-arrow" marker-end="url(#legendArrowHead)"/>
+          <text x="24" y="84" class="legend-text">+Y</text>
+          <!-- +Yaw clockwise curved arrow -->
+          <path d="M 55 65 A 16 16 0 1 1 68 52" class="legend-yaw" marker-end="url(#legendYawHead)"/>
+          <text x="52" y="30" class="legend-text">+Yaw</text>
+          <defs>
+            <marker id="legendArrowHead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="var(--accent)"/>
+            </marker>
+            <marker id="legendYawHead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="var(--accent-2)"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+    </section>
+    <div id="wpList"><div class="empty-hint">Load a flight plan to see waypoints</div></div>
+  </div>
+
+  <!-- RIGHT: Waypoint detail + Export -->
+  <div class="col">
+    <section id="detailSection" style="display:none">
+      <h2>Waypoint <span id="detailIndex"></span></h2>
+      <div class="field-grid">
+        <div>
+          <label>Anchor</label>
+          <select id="fAnchor">
+            <option value="a">a — front-left</option>
+            <option value="b">b — rear-left</option>
+            <option value="c">c — rear-right</option>
+            <option value="d">d — front-right</option>
+          </select>
+        </div>
+        <div>
+          <label>Altitude</label>
+          <input type="number" id="fAlt">
+        </div>
+        <div>
+          <label>X offset</label>
+          <input type="number" id="fX">
+        </div>
+        <div>
+          <label>Y offset</label>
+          <input type="number" id="fY">
+        </div>
+        <div>
+          <label>Pitch</label>
+          <input type="number" id="fPitch">
+        </div>
+        <div>
+          <label>Yaw</label>
+          <input type="number" id="fYaw">
+        </div>
+      </div>
+      <label>Photo name</label>
+      <input type="text" id="fPhoto">
+      <label>Video name</label>
+      <input type="text" id="fVideo" placeholder="(none)">
+      <div class="row">
+        <button id="btnSave">Save</button>
+        <button class="secondary" id="btnCancel">Cancel</button>
+      </div>
+    </section>
+    <section id="noSelection">
+      <h2>Waypoint Details</h2>
+      <div class="hint">Click a waypoint on the path or in the list to view/edit it.</div>
+    </section>
+
+    <section>
+      <h2>Export</h2>
+      <label class="radio-opt selected" id="optFullWrap">
+        <input type="radio" name="exportMode" value="full" checked>
+        <div>
+          <div class="t">Full Localisation</div>
+          <div class="d">Uses all anchor points (a/b/c/d) as-is. Relies on the drone's live localisation for the car's size.</div>
+        </div>
+      </label>
+      <label class="radio-opt" id="optPartialWrap">
+        <input type="radio" name="exportMode" value="partial">
+        <div>
+          <div class="t">Partial Localisation</div>
+          <div class="d">Only anchors A and D are trusted. Waypoints on B/C are remapped to A/D using vehicle length.</div>
+        </div>
+      </label>
+      <button id="btnExport" style="width:100%; margin-top:12px;" disabled>Export &amp; Download</button>
+      <div id="exportStatus"></div>
+    </section>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const state = {
+    plan: null,        // { version, description, waypoints: [...] }
+    selectedIndex: null,
+    editingCopy: null,
+  };
+
+  const $ = id => document.getElementById(id);
+
+  // ---------- Anchor math ----------
+  function anchorXY(anchorPoint, W, L) {
+    switch (anchorPoint) {
+      case 'a': return { x: -W, y: -L };
+      case 'b': return { x: -W, y: +L };
+      case 'c': return { x: +W, y: +L };
+      case 'd': return { x: +W, y: -L };
+      default: return { x: 0, y: 0 };
+    }
+  }
+
+  function waypointXY(wp, W, L) {
+    const a = anchorXY(wp['anchor-point'], W, L);
+    return {
+      x: a.x - (wp['x-offset'] || 0),
+      y: a.y + (wp['y-offset'] || 0),
+    };
+  }
+
+  const NOMINAL_HALF_WIDTH = 90; // cosmetic only — real width isn't collected
+
+  function vehicleWL() {
+    const length = parseFloat($('vehLength').value) || 0;
+    return { W: NOMINAL_HALF_WIDTH, L: length / 2, length };
+  }
+
+  // ---------- Loading ----------
+  $('fileInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const json = JSON.parse(reader.result);
+        if (!Array.isArray(json.waypoints) || json.waypoints.length < 2) {
+          throw new Error('File must contain a "waypoints" array with at least 2 entries.');
+        }
+        state.plan = json;
+        state.selectedIndex = null;
+        $('loadStatus').innerHTML = `<div class="status ok">Loaded ${json.waypoints.length} waypoints.</div>`;
+        $('btnExport').disabled = false;
+        $('btnMirror').disabled = false;
+        renderAll();
+      } catch (err) {
+        $('loadStatus').innerHTML = `<div class="status err">Failed to load: ${escapeHtml(err.message)}</div>`;
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  $('vehLength').addEventListener('input', renderAll);
+
+  // ---------- Rendering ----------
+  function renderAll() {
+    renderHeader();
+    renderSvg();
+    renderList();
+    renderDetail();
+  }
+
+  function renderHeader() {
+    $('headerDesc').textContent = state.plan ? state.plan.description : 'No plan loaded';
+    $('planDesc').value = state.plan ? state.plan.description : '';
+  }
+
+  function renderSvg() {
+    const svg = $('pathSvg');
+    svg.innerHTML = '';
+    if (!state.plan) return;
+
+    const { W, L } = vehicleWL();
+    const points = state.plan.waypoints.map(wp => waypointXY(wp, W, L));
+
+    // fit viewBox to content (car rect + waypoints), with padding
+    const xs = points.map(p => p.x).concat([-W, W + 60]);
+    const ys = points.map(p => p.y).concat([-L - 40, L]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const pad = Math.max(60, (maxX - minX) * 0.15, (maxY - minY) * 0.15);
+    const vbX = minX - pad, vbY = minY - pad;
+    const vbW = (maxX - minX) + pad * 2 || 400;
+    const vbH = (maxY - minY) + pad * 2 || 400;
+    svg.setAttribute('viewBox', `${vbX} ${vbY} ${vbW} ${vbH}`);
+
+    const ns = 'http://www.w3.org/2000/svg';
+    const g = document.createElementNS(ns, 'g');
+
+    // car rect
+    const rect = document.createElementNS(ns, 'rect');
+    rect.setAttribute('x', -W); rect.setAttribute('y', -L);
+    rect.setAttribute('width', W * 2); rect.setAttribute('height', L * 2);
+    rect.setAttribute('class', 'car-rect');
+    g.appendChild(rect);
+
+    // anchor labels
+    [['a', -W, -L], ['b', -W, L], ['c', W, L], ['d', W, -L]].forEach(([name, x, y]) => {
+      const t = document.createElementNS(ns, 'text');
+      t.setAttribute('x', x); t.setAttribute('y', y);
+      t.setAttribute('class', 'anchor-label');
+      t.setAttribute('text-anchor', name === 'a' || name === 'b' ? 'end' : 'start');
+      t.textContent = name;
+      g.appendChild(t);
+    });
+
+    // FRONT label (top edge, y = -L)
+    const frontLabel = document.createElementNS(ns, 'text');
+    frontLabel.setAttribute('x', 0);
+    frontLabel.setAttribute('y', -L - 10);
+    frontLabel.setAttribute('text-anchor', 'middle');
+    frontLabel.setAttribute('class', 'side-label');
+    frontLabel.textContent = 'FRONT';
+    g.appendChild(frontLabel);
+
+    // DRIVER SIDE label (right edge, x = +W), reading bottom-to-top
+    const driverLabel = document.createElementNS(ns, 'text');
+    driverLabel.setAttribute('x', W + 10);
+    driverLabel.setAttribute('y', 0);
+    driverLabel.setAttribute('text-anchor', 'middle');
+    driverLabel.setAttribute('class', 'side-label');
+    driverLabel.setAttribute('transform', `rotate(90 ${W + 10} 0)`);
+    driverLabel.textContent = 'DRIVER SIDE';
+    g.appendChild(driverLabel);
+
+    // path line
+    if (points.length > 1) {
+      const path = document.createElementNS(ns, 'path');
+      const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+      path.setAttribute('d', d);
+      path.setAttribute('class', 'path-line');
+      g.appendChild(path);
+    }
+
+    // waypoint dots
+    points.forEach((p, i) => {
+      const c = document.createElementNS(ns, 'circle');
+      c.setAttribute('cx', p.x); c.setAttribute('cy', p.y);
+      c.setAttribute('r', i === state.selectedIndex ? 11 : 9);
+      c.setAttribute('class', 'wp-dot' + (i === state.selectedIndex ? ' selected' : ''));
+      c.addEventListener('click', () => selectWaypoint(i));
+      g.appendChild(c);
+
+      const label = document.createElementNS(ns, 'text');
+      label.setAttribute('x', p.x + 13);
+      label.setAttribute('y', p.y - 12);
+      label.setAttribute('class', 'wp-label');
+      label.textContent = state.plan.waypoints[i].waypoint_name ?? (i + 1);
+      g.appendChild(label);
+    });
+
+    svg.appendChild(g);
+  }
+
+  function renderList() {
+    const container = $('wpList');
+    if (!state.plan) {
+      container.innerHTML = '<div class="empty-hint">Load a flight plan to see waypoints</div>';
+      return;
+    }
+    container.innerHTML = '';
+    state.plan.waypoints.forEach((wp, i) => {
+      const row = document.createElement('div');
+      row.className = 'wp-row' + (i === state.selectedIndex ? ' selected' : '');
+      row.innerHTML = `
+        <span class="idx">${i + 1}</span>
+        <span class="anchor-tag">${wp['anchor-point']}</span>
+        <span>${escapeHtml(wp['photo-name'] || '')}</span>
+      `;
+      row.addEventListener('click', () => selectWaypoint(i));
+      container.appendChild(row);
+    });
+  }
+
+  function selectWaypoint(i) {
+    state.selectedIndex = i;
+    state.editingCopy = { ...state.plan.waypoints[i] };
+    renderSvg();
+    renderList();
+    renderDetail();
+  }
+
+  function renderDetail() {
+    const has = state.selectedIndex !== null && state.plan;
+    $('detailSection').style.display = has ? 'block' : 'none';
+    $('noSelection').style.display = has ? 'none' : 'block';
+    if (!has) return;
+
+    const wp = state.editingCopy;
+    $('detailIndex').textContent = `#${state.selectedIndex + 1}`;
+    $('fAnchor').value = wp['anchor-point'];
+    $('fAlt').value = wp['altitude'];
+    $('fX').value = wp['x-offset'];
+    $('fY').value = wp['y-offset'];
+    $('fPitch').value = wp['pitch-value'];
+    $('fYaw').value = wp['yaw-value'];
+    $('fPhoto').value = wp['photo-name'] || '';
+    $('fVideo').value = wp['video-name'] || '';
+  }
+
+  $('btnSave').addEventListener('click', () => {
+    if (state.selectedIndex === null) return;
+    const wp = state.plan.waypoints[state.selectedIndex];
+    wp['anchor-point'] = $('fAnchor').value;
+    wp['altitude'] = numOr($('fAlt').value, wp['altitude']);
+    wp['x-offset'] = numOr($('fX').value, wp['x-offset']);
+    wp['y-offset'] = numOr($('fY').value, wp['y-offset']);
+    wp['pitch-value'] = numOr($('fPitch').value, wp['pitch-value']);
+    wp['yaw-value'] = numOr($('fYaw').value, wp['yaw-value']);
+    wp['photo-name'] = $('fPhoto').value;
+    wp['video-name'] = $('fVideo').value.trim() === '' ? null : $('fVideo').value;
+    state.editingCopy = { ...wp };
+    renderAll();
+  });
+
+  $('btnCancel').addEventListener('click', () => {
+    if (state.selectedIndex === null) return;
+    state.editingCopy = { ...state.plan.waypoints[state.selectedIndex] };
+    renderDetail();
+  });
+
+  const MIRROR_ANCHOR = { a: 'd', d: 'a', b: 'c', c: 'b' };
+
+  function normalizeAngle(deg) {
+    return ((deg + 180) % 360 + 360) % 360 - 180;
+  }
+
+  $('btnMirror').addEventListener('click', () => {
+    if (!state.plan) return;
+    state.plan.waypoints = state.plan.waypoints.map(wp => {
+      const copy = { ...wp };
+      copy['anchor-point'] = MIRROR_ANCHOR[wp['anchor-point']] || wp['anchor-point'];
+      copy['x-offset'] = -(wp['x-offset'] || 0);
+      copy['yaw-value'] = normalizeAngle(-(wp['yaw-value'] || 0));
+      return copy;
+    });
+    state.selectedIndex = null;
+    state.editingCopy = null;
+    renderAll();
+  });
+
+  function numOr(val, fallback) {
+    const n = parseFloat(val);
+    return isNaN(n) ? fallback : n;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  // ---------- Export ----------
+  document.querySelectorAll('input[name=exportMode]').forEach(r => {
+    r.addEventListener('change', () => {
+      $('optFullWrap').classList.toggle('selected', r.value === 'full' && r.checked);
+      document.querySelectorAll('input[name=exportMode]').forEach(rr => {
+        document.getElementById(rr.value === 'full' ? 'optFullWrap' : 'optPartialWrap')
+          .classList.toggle('selected', rr.checked);
+      });
+    });
+  });
+
+  function bumpIteration(desc) {
+    const re = /iteration\s+(\d+)/i;
+    const m = desc.match(re);
+    if (m) {
+      const next = parseInt(m[1], 10) + 1;
+      return desc.replace(re, `iteration ${next}`);
+    }
+    return `${desc} iteration 1`;
+  }
+
+  function applyPartialLocalisation(waypoints, vehicleLength) {
+    return waypoints.map(wp => {
+      const copy = { ...wp };
+      if (copy['anchor-point'] === 'b') {
+        copy['anchor-point'] = 'a';
+        copy['y-offset'] = (copy['y-offset'] || 0) + vehicleLength;
+      } else if (copy['anchor-point'] === 'c') {
+        copy['anchor-point'] = 'd';
+        copy['y-offset'] = (copy['y-offset'] || 0) + vehicleLength;
+      }
+      return copy;
+    });
+  }
+
+  $('btnExport').addEventListener('click', () => {
+    if (!state.plan) return;
+    const mode = document.querySelector('input[name=exportMode]:checked').value;
+
+    let waypoints = state.plan.waypoints;
+    if (mode === 'partial') {
+      const { length } = vehicleWL();
+      if (!length || length <= 0) {
+        $('exportStatus').innerHTML = `<div class="status err">Enter a vehicle length &gt; 0 for Partial Localisation.</div>`;
+        return;
+      }
+      waypoints = applyPartialLocalisation(waypoints, length);
+    }
+
+    const outPlan = {
+      ...state.plan,
+      description: bumpIteration(state.plan.description || ''),
+      waypoints,
+    };
+
+    const blob = new Blob([JSON.stringify(outPlan, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const safeName = (outPlan.description || 'flight-plan').replace(/[^a-z0-9\- _]/gi, '_');
+    a.href = url;
+    a.download = `${safeName}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    state.plan.description = outPlan.description;
+    renderHeader();
+    $('exportStatus').innerHTML = `<div class="status ok">Exported "${escapeHtml(outPlan.description)}".</div>`;
+  });
+
+  renderAll();
+})();
+</script>
+</body>
+</html>

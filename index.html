@@ -236,6 +236,10 @@
         Mirrors the plan left-right: anchors a↔d and b↔c swap, x-offset negates, yaw-value negates. y-offset and altitude are unchanged.
       </p>
       <button class="secondary" id="btnMirror" style="width:100%" disabled>Mirror Plan (Y axis)</button>
+      <p class="hint">
+        Re-links each waypoint to its closest anchor (based on vehicle length) while adjusting the offset so its position is unchanged. Useful for recovering anchors on partially localised flight plans.
+      </p>
+      <button class="secondary" id="btnRemap" style="width:100%" disabled>Re-Map</button>
     </section>
   </div>
 
@@ -392,6 +396,7 @@
         $('loadStatus').innerHTML = `<div class="status ok">Loaded ${json.waypoints.length} waypoints.</div>`;
         $('btnExport').disabled = false;
         $('btnMirror').disabled = false;
+        $('btnRemap').disabled = false;
         renderAll();
       } catch (err) {
         $('loadStatus').innerHTML = `<div class="status err">Failed to load: ${escapeHtml(err.message)}</div>`;
@@ -582,6 +587,36 @@
       copy['anchor-point'] = MIRROR_ANCHOR[wp['anchor-point']] || wp['anchor-point'];
       copy['x-offset'] = -(wp['x-offset'] || 0);
       copy['yaw-value'] = normalizeAngle(-(wp['yaw-value'] || 0));
+      return copy;
+    });
+    state.selectedIndex = null;
+    state.editingCopy = null;
+    renderAll();
+  });
+
+  const ANCHOR_POINTS = ['a', 'b', 'c', 'd'];
+
+  $('btnRemap').addEventListener('click', () => {
+    if (!state.plan) return;
+    const { W, L } = vehicleWL();
+    state.plan.waypoints = state.plan.waypoints.map(wp => {
+      const pos = waypointXY(wp, W, L);
+      let closest = wp['anchor-point'];
+      let closestDist2 = Infinity;
+      for (const ap of ANCHOR_POINTS) {
+        const a = anchorXY(ap, W, L);
+        const dx = a.x - pos.x, dy = a.y - pos.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < closestDist2) {
+          closestDist2 = d2;
+          closest = ap;
+        }
+      }
+      const a = anchorXY(closest, W, L);
+      const copy = { ...wp };
+      copy['anchor-point'] = closest;
+      copy['x-offset'] = a.x - pos.x;
+      copy['y-offset'] = pos.y - a.y;
       return copy;
     });
     state.selectedIndex = null;
